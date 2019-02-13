@@ -1,0 +1,26 @@
+select
+distinct(date(date_parse(p.datestamp, '%Y%m%d'))) "Date", -- Date
+o.object_name "Publisher", -- "Supply Seat/SSP" Name when object_type = 1, AKA Publisher name in old tables
+o.object_id "Publisher ID",-- "Supply Seat/SSP" ID when object type = 2, AKA Publisher ID in old tables
+o.platform_id "Platform ID",-- Other IDs inlclude 13 = OneVideo, 14 = OneMobile, 15 = OneDisplay US
+o.platform "Platform", -- e.g. ONE_MOBILE, ONE_DISPLAYUS, ONE_VIDEO
+sum(p.supply_platform_revenue / 1000000000.00000) "revenue", -- must divide Nest revenue by 1,000,000,000 followed by 5 zeros after the decimal
+SUM(if(event_type=2,1,0)) as impressions,
+SUM(if(event_type=5,1,0)) as bid_responses,
+SUM(if(event_type=5,1,0)) as measurableImps,
+sum(coalesce(p.demand_advertiser_cost, p.supply_platform_revenue) / 1000000000.00000) revenue2
+from 
+preagg_daily_orc p -- this is one of the key fact tables in Nest, it has already aggregated data
+inner join
+nest_supply_dim_orc o -- this is our main dimension table, think of it as a combined publisher/site/placement DARBI dim table
+on
+p.supply_local_supply_seat_id = o.object_id 
+       -- through trial & error, found that supply_local_supply_seat_id is what we know as Publisher ID. 
+       -- Since we declared the 'object type' below as 1 AKA publisher, we are joining on publisher IDs between these two tables
+and o.object_id = 1031500001 -- found by pulling ID when I knew the exact name
+and o.object_type = 1 -- SellerObjectType tab of Metadata doc
+and o.platform_id = 15 -- Platform tab of Metadata doc
+where
+p.datestamp >= '20190206'-- can use this date format when pulling for a single day
+-- date(date_parse(p.datestamp, '%Y%m%d')) >= current_date - interval '2' day -- use this format when you want to pull a range
+group by 1,2,3,4,5
